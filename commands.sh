@@ -1,5 +1,4 @@
 #!/bin/bash
-dbname=$1
 
 uncache(){
 wp cache flush --skip-plugins --skip-themes --allow-root --all
