@@ -3,8 +3,8 @@
 # Temporary file to store user input
 input_file=$(mktemp)
 
-# Prompt for bot names to block and write to the temporary file
 echo "Enter the bot names to block (one per line). Type 'done' on a new line to finish:"
+
 while true; do
     read bot_name
     if [[ "$bot_name" == "done" ]]; then
