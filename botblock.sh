@@ -1,18 +1,24 @@
 #!/bin/bash
 
-# Initialize an array to store bot names
-declare -a bot_names=()
+# Temporary file to store user input
+input_file=$(mktemp)
 
+# Prompt for bot names to block and write to the temporary file
+echo "Enter the bot names to block (one per line). Type 'done' on a new line to finish:"
 while true; do
-    read -p "Enter the bot name to block (or type 'done' to finish): " bot_name
+    read bot_name
     if [[ "$bot_name" == "done" ]]; then
         break
     elif [[ -z "$bot_name" ]]; then
         echo "No bot name entered. Please enter a valid bot name."
     else
-        bot_names+=("$bot_name")
+        echo "$bot_name" >> "$input_file"
     fi
 done
+
+# Read the bot names from the temporary file into an array
+mapfile -t bot_names < "$input_file"
+rm "$input_file"  # Remove the temporary file
 
 if [[ ${#bot_names[@]} -eq 0 ]]; then
     echo "No bot names entered. Exiting."
