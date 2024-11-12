@@ -44,7 +44,9 @@ block_code="${block_code%|}\") {\n    return 403;\n}"
 echo -e "$block_code" > "$config_file"
 echo "Bots ${combined_bots[*]} have been blocked and the configuration has been updated."
 echo ""
+
 nginx -t
 systemctl reload nginx
+
 echo "NGINX HAS BEEN RESTARTED"
 echo ""
