@@ -6,3 +6,4 @@ wp elementor flush_css
 redis-cli flushall
 wp breeze purge --cache=all
 }
+echo "hello there"
