@@ -1,5 +1,5 @@
 #!/bin/bash
-botblock(){
+
     ezbot=()
     while true; do
         read -p "Enter the bot name to block (or type 'done' to finish): " ezbot
@@ -48,4 +48,3 @@ botblock(){
 
     echo "NGINX HAS BEEN RESTARTED"
     echo ""
-}
