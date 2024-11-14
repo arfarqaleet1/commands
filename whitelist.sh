@@ -28,4 +28,3 @@ if [[ $status == true ]]; then
 else
     echo "Failed to whitelist IP. Response: $response"
 fi
-cat /etc/shorewall/macro.ADMINER 
