@@ -1,41 +1,30 @@
 #!/bin/bash
-while :; do
-        echo "Select an action: add, delete, blacklist, fullaccess. Type 'exit' to finish."
-        read -p "Action: " ACTION
 
-        if [[ "$ACTION" == "exit" ]]; then
-            break
-        elif [[ "$ACTION" != "add" && "$ACTION" != "delete" && "$ACTION" != "blacklist" && "$ACTION" != "fullaccess" ]]; then
-            echo "Invalid action. Please choose from: add, delete, blacklist, fullaccess, or type 'exit' to finish."
-            continue
-        fi
+echo "Please get API details from the client's Dashboard first"
 
-        echo "Enter IP address or range. Type 'done' to finish."
-        while :; do
-            read -p "IP/Range: " IP_RANGE
-            if [[ "$IP_RANGE" == "done" ]]; then
-                break
-            fi
+read -p "Please enter client's Email: " email <&1
+read -p "Please enter client's API key: " api_key <&1
+read -p "Please enter IP to whitelist: " whitelist_ip <&1
+read -p "Please enter Server ID: " server_id <&1
 
-            case $ACTION in
-                add)
-                    imunify360-agent ip-list local add --purpose white "$IP_RANGE"
-                    echo "Added $IP_RANGE to whitelist"
-                    ;;
-                delete)
-                    imunify360-agent ip-list local delete --purpose white "$IP_RANGE"
-                    echo "Deleted $IP_RANGE from whitelist"
-                    ;;
-                blacklist)
-                    imunify360-agent ip-list local add --purpose drop "$IP_RANGE" --comment "Blocking this IP"
-                    echo "Added $IP_RANGE to blacklist"
-                    ;;
-                fullaccess)
-                    imunify360-agent ip-list local add --purpose white "$IP_RANGE" --scope group --full-access --comment "Global Trusted IP"
-                    echo "Added $IP_RANGE to whitelist with full access"
-                    ;;
-            esac
-        done
-    done
+get_token=$(curl --silent -X POST --header 'Content-Type: application/x-www-form-urlencoded' --header 'Accept: application/json' -d "email=$email&api_key=$api_key" 'https://api.cloudways.com/api/v1/oauth/access_token')
 
-    echo "All IP ranges have been processed."
+token_value=$(echo "$get_token" | sed -n 's|.*"access_token":"\([^"]*\)".*|\1|p')
+
+if [[ -z $token_value ]]; then
+    echo "Authorization failed. Please check your email and API key."
+    exit 1
+fi
+
+# Whitelist IP in Adminer
+response=$(curl -s -X POST --header "Content-Type: application/x-www-form-urlencoded" --header "Accept: application/json" --header "Authorization: Bearer $token_value" -d "server_id=$server_id&whitelist_ip=1" "https://api.cloudways.com/api/v1/security/adminer?ip=$whitelist_ip")
+
+echo "Response from server: $response"
+
+status=$(echo "$response" | grep -o '"status":"[^"]*' | grep -o '[^"]*$')
+
+if [[ $status == "success" ]]; then
+    echo "IP $whitelist_ip has been whitelisted in Adminer for server ID: $server_id"
+else
+    echo "Failed to whitelist IP. Response: $response"
+fi
