@@ -21,9 +21,9 @@ response=$(curl -s -X POST --header "Content-Type: application/x-www-form-urlenc
 
 echo "Response from server: $response"
 
-status=$(echo "$response" | grep -o '"status":"[^"]*' | grep -o '[^"]*$')
+status=$(echo "$response" | grep -o '"status":[^,]*' | grep -o '[^:]*$')
 
-if [[ $status == "success" ]]; then
+if [[ $status == true ]]; then
     echo "IP $whitelist_ip has been whitelisted in Adminer for server ID: $server_id"
 else
     echo "Failed to whitelist IP. Response: $response"
