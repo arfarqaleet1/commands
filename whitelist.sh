@@ -20,11 +20,13 @@ fi
 response=$(curl -s -X POST --header "Content-Type: application/x-www-form-urlencoded" --header "Accept: application/json" --header "Authorization: Bearer $token_value" -d "server_id=$server_id&whitelist_ip=1" "https://api.cloudways.com/api/v1/security/adminer?ip=$whitelist_ip")
 
 echo "Response from server: $response"
+echo ""
 
 status=$(echo "$response" | grep -o '"status":[^,]*' | grep -o '[^:]*$')
 
 if [[ $status == true ]]; then
     echo "IP $whitelist_ip has been whitelisted in Adminer for server ID: $server_id"
+    echo ""
 else
     echo "Failed to whitelist IP. Response: $response"
 fi
