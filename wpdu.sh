@@ -1,10 +1,8 @@
 #!/bin/bash
 
+read -p "Enter the WordPress version to which you want to downgrade (e.g., 6.6.2): " target_version
 # Path to the base directory where apps are located
 base_dir="/home/master/applications"
-
-# Prompt the user for the desired WordPress version
-read -p "Enter the WordPress version to which you want to downgrade (e.g., 6.6.2): " target_version
 
 # Loop through each directory in the base directory
 for app_path in "${base_dir}"/*; do
