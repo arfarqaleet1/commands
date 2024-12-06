@@ -1,52 +1,38 @@
 #!/bin/bash
 
-# Check if the script received the WordPress version as an argument
-if [ -z "$1" ]; then
-    echo "Usage: $0 <wordpress-version>"
+echo "Please get API details from the client's Dashboard first"
+
+read -p "Please enter client's Email: " email <&1
+read -p "Please enter client's API key: " api_key <&1
+read -p "Please enter Server ID: " server_id <&1
+
+get_token=$(curl --silent -X POST --header 'Content-Type: application/x-www-form-urlencoded' --header 'Accept: application/json' -d "email=$email&api_key=$api_key" 'https://api.cloudways.com/api/v1/oauth/access_token')
+
+token_value=$(echo "$get_token" | sed -n 's|.*"access_token":"\([^"]*\)".*|\1|p')
+
+if [[ -z $token_value ]]; then
+    echo "Authorization failed. Please check your email and API key."
     exit 1
 fi
 
-# Assign the argument to the target_version variable
-target_version=$1
+echo "Authorization successful. Access token obtained."
 
-# Path to the base directory where apps are located
-base_dir="/home/master/applications"
+while true; do
+    read -p "Please enter App ID (or type 'done' to finish): " app_id <&1
+    if [[ "$app_id" == "done" ]]; then
+        break
+    fi
+    response=$(curl -s -X POST --header 'Content-Type: application/x-www-form-urlencoded' --header 'Accept: application/json' --header "Authorization: Bearer $token_value" -d "server_id=$server_id&app_id=$app_id&status=enable" "https://api.cloudways.com/api/v1/app/manage/cron_setting")
 
-# Loop through each directory in the base directory
-for app_path in "${base_dir}"/*; do
-    if [ -d "${app_path}/public_html" ]; then
-        echo "Checking app: ${app_path}/public_html"
+    echo "Response for App ID $app_id: $response"
+    echo ""
 
-        # Check if WordPress is installed by looking for wp-config.php
-        if [ -f "${app_path}/public_html/wp-config.php" ]; then
-            echo "WordPress detected in ${app_path}/public_html. Checking version..."
+    status=$(echo "$response" | grep -o '"status":[^,]*' | grep -o '[^:]*$')
 
-            # Get the current WordPress version
-            wp_version=$(wp core version --path="${app_path}/public_html" --allow-root)
-            if [ $? -ne 0 ]; then
-                echo "Failed to retrieve WordPress version for ${app_path}/public_html. Skipping..."
-                continue
-            fi
-            echo "Current WordPress version: ${wp_version}"
-
-            # Downgrade WordPress to the specified version if not already on that version
-            if [ "${wp_version}" != "${target_version}" ]; then
-                echo "Downgrading WordPress to version ${target_version}..."
-                wp core download --force --version=${target_version} --path="${app_path}/public_html" --allow-root
-                if [ $? -eq 0 ]; then
-                    echo "Downgrade complete for ${app_path}/public_html."
-                else
-                    echo "Failed to downgrade WordPress for ${app_path}/public_html."
-                fi
-            else
-                echo "WordPress is already on version ${target_version} in ${app_path}/public_html."
-            fi
-        else
-            echo "No WordPress installation detected in ${app_path}/public_html."
-        fi
-
-        echo "----------------------------------------"
+    if [[ $status == true ]]; then
+        echo "Cron setting enabled for App ID: $app_id"
+        echo ""
     else
-        echo "No public_html directory found in ${app_path}. Skipping..."
+        echo "Failed to enable cron setting for App ID: $app_id. Response: $response"
     fi
 done
