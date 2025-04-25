@@ -5,6 +5,7 @@ read -p "Please enter client's Email: " email <&1
 read -p "Please enter client's API key: " api_key <&1
 
 JQ="/usr/bin/jq"
+CSV_FILE="cloudways_apps.csv"
 
 if [[ -x $JQ ]]; then
     get_token=$(curl --silent -X POST \
@@ -21,6 +22,9 @@ if [[ -x $JQ ]]; then
     echo ""
     printf "%-17s | %-15s | %-8s | %-10s | %-22s | %-45s | %-20s | %-10s\n" "Server IP" "Server Name" "App ID" "Sys User" "App Name" "App FQDN" "CNAME" "Type"
     printf -- "------------------|-----------------|----------|------------|------------------------|-----------------------------------------------|----------------------|-----------\n"
+
+    # Write CSV headers
+    echo "\"Server IP\",\"Server Name\",\"App ID\",\"Sys User\",\"App Name\",\"App FQDN\",\"CNAME\",\"Type\"" > "$CSV_FILE"
 
     last_ip=""
 
@@ -43,10 +47,14 @@ if [[ -x $JQ ]]; then
 
             printf "%-17s | %-15s | %-8s | %-10s | %-22s | %-45s | %-20s | %-10s\n" \
                 "$server_ip" "$server_name" "$app_id" "$sys_user" "$app_label" "$app_fqdn" "$cname" "$app_type"
+
+            # Append CSV row
+            echo "\"$server_ip\",\"$server_name\",\"$app_id\",\"$sys_user\",\"$app_label\",\"$app_fqdn\",\"$cname\",\"$app_type\"" >> "$CSV_FILE"
         done
     done
 
     echo ""
+    echo "📄 CSV file saved to: $CSV_FILE"
     rm "$temp_json"
 else
     echo -n $'\U274E '
