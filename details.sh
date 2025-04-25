@@ -5,7 +5,6 @@ read -p "Please enter client's Email: " email <&1
 read -p "Please enter client's API key: " api_key <&1
 
 JQ="/usr/bin/jq"
-OUTPUT_FILE="cloudways_apps_table.txt"
 
 if [[ -x $JQ ]]; then
     get_token=$(curl --silent -X POST \
@@ -20,11 +19,8 @@ if [[ -x $JQ ]]; then
 
     echo "Below is a table of servers and apps for client: $email"
     echo ""
-
-    {
-        printf "%-17s | %-15s | %-8s | %-10s | %-22s | %-45s | %-20s | %-10s\n" "Server IP" "Server Name" "App ID" "Sys User" "App Name" "App FQDN" "CNAME" "Type"
-        printf -- "------------------|-----------------|----------|------------|------------------------|-----------------------------------------------|----------------------|-----------\n"
-    } | tee "$OUTPUT_FILE"
+    printf "%-17s | %-15s | %-8s | %-10s | %-22s | %-45s | %-20s | %-10s\n" "Server IP" "Server Name" "App ID" "Sys User" "App Name" "App FQDN" "CNAME" "Type"
+    printf -- "------------------|-----------------|----------|------------|------------------------|-----------------------------------------------|----------------------|-----------\n"
 
     last_ip=""
 
@@ -33,7 +29,7 @@ if [[ -x $JQ ]]; then
         server_name=$(echo "$server" | jq -r '.label')
 
         if [[ "$server_ip" != "$last_ip" && -n "$last_ip" ]]; then
-            echo "" | tee -a "$OUTPUT_FILE"
+            echo ""
         fi
         last_ip="$server_ip"
 
@@ -46,12 +42,11 @@ if [[ -x $JQ ]]; then
             app_type=$(echo "$app" | jq -r '.application')
 
             printf "%-17s | %-15s | %-8s | %-10s | %-22s | %-45s | %-20s | %-10s\n" \
-                "$server_ip" "$server_name" "$app_id" "$sys_user" "$app_label" "$app_fqdn" "$cname" "$app_type" | tee -a "$OUTPUT_FILE"
+                "$server_ip" "$server_name" "$app_id" "$sys_user" "$app_label" "$app_fqdn" "$cname" "$app_type"
         done
     done
 
     echo ""
-    echo "📄 Table also saved to: $OUTPUT_FILE"
     rm "$temp_json"
 else
     echo -n $'\U274E '
