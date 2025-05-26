@@ -1,49 +1,56 @@
 #!/bin/bash
 
-php_version=$(php -v | awk '/PHP/ {print $2}' | cut -d "." -f 1,2 | head -n 1);
+set -e
+
+php_version=$(php -v | awk '/PHP/ {print $2}' | cut -d '.' -f1,2 | head -n1)
 
 if [ "$php_version" = "8.0" ]; then
-    echo "$(tput setaf 1)Error:$(tput setaf 7) IonCube isn't compatible with PHP v8.0 and there is no release for v8.0 yet."
+    echo -e "\e[31mError:\e[0m IonCube isn't compatible with PHP v8.0 and there is no release for v8.0 yet."
     echo "Exiting..."
     exit 1
 fi
 
-mkdir -p /tmp/update_ioncube
-cd /tmp/update_ioncube || exit 1
+TMP_DIR="/tmp/update_ioncube"
+IONCUBE_VER="13.0.2"
 
-# Download ionCube Loader v13.0.2 tar.gz (specific version)
-wget -q https://downloads.ioncube.com/loader_downloads/ioncube_loaders_lin_x86-64_13.0.2.tar.gz
+echo "Installing ionCube Loader v$IONCUBE_VER for PHP $php_version"
 
-# Extract
-tar -xzf ioncube_loaders_lin_x86-64_13.0.2.tar.gz
+mkdir -p "$TMP_DIR"
+cd "$TMP_DIR"
 
-ext_dir=$(php -i | grep extension_dir | head -n 1 | awk '{print $3}')
+# Download specific ionCube loader version
+wget -q "https://downloads.ioncube.com/loader_downloads/ioncube_loaders_lin_x86-64_${IONCUBE_VER}.tar.gz"
 
-# Prepare ini filename and path
-ini_dir="/etc/php/$php_version/cli/conf.d"
-ini_file=$(ls "$ini_dir" | grep ioncube || echo "05-ioncube.ini")
+tar -xzf "ioncube_loaders_lin_x86-64_${IONCUBE_VER}.tar.gz"
 
-# Copy correct ioncube loader for your PHP version
-cp "ioncube/ioncube_loader_lin_${php_version}.so" "$ext_dir"
+# Get PHP extension dir
+EXT_DIR=$(php -i | grep extension_dir | head -n1 | awk '{print $3}')
 
-# Make sure ioncube.ini loads ionCube loader as zend_extension with full path
-echo "zend_extension=$ext_dir/ioncube_loader_lin_${php_version}.so" | sudo tee "$ini_dir/$ini_file" > /dev/null
+# Copy loader for current PHP version
+cp "ioncube/ioncube_loader_lin_${php_version}.so" "$EXT_DIR"
 
-# Rename ini file to ensure it loads first
-sudo mv "$ini_dir/$ini_file" "/etc/php/$php_version/mods-available/00-ioncube.ini"
+# Prepare ini file path
+MODS_AVAILABLE_DIR="/etc/php/$php_version/mods-available"
+CLI_CONF_DIR="/etc/php/$php_version/cli/conf.d"
+FPM_CONF_DIR="/etc/php/$php_version/fpm/conf.d"
 
-# Enable ioncube module (recreate symlinks for cli and fpm)
-sudo phpdismod -v "$php_version" ioncube
+sudo mkdir -p "$MODS_AVAILABLE_DIR"
+
+# Write ini file with full path, ensure ionCube loads first by naming 00-ioncube.ini
+echo "zend_extension=$EXT_DIR/ioncube_loader_lin_${php_version}.so" | sudo tee "$MODS_AVAILABLE_DIR/00-ioncube.ini" > /dev/null
+
+# Disable and enable ioncube module to recreate symlinks correctly
+sudo phpdismod -v "$php_version" ioncube || true
 sudo phpenmod -v "$php_version" ioncube
 
-# Restart PHP-FPM and nginx (adjust if using apache)
+# Restart PHP-FPM and web server (adjust if not nginx)
+sudo systemctl restart php"$php_version"-fpm
 sudo systemctl reload nginx
-sudo systemctl reload php"${php_version}"-fpm
 
-# Verify installation
+# Verify ionCube loader is loaded
 php -v | grep -B 3 -P 'ionCube PHP Loader v\d+\.\d+\.\d+'
 
-# Clean up
-rm -rf /tmp/update_ioncube
+# Cleanup
+rm -rf "$TMP_DIR"
 
-exit 0
+echo "ionCube Loader v$IONCUBE_VER installation completed for PHP $php_version."
