@@ -2,62 +2,71 @@
 
 set -e
 
-php_version=$(php -v | awk '/PHP/ {print $2}' | cut -d '.' -f1,2 | head -n1)
+read -p "Enter ionCube Loader version to install (default 13.0.2): " ioncube_version
+ioncube_version=${ioncube_version:-13.0.2}
 
-if [ "$php_version" = "8.0" ]; then
-    echo -e "\e[31mError:\e[0m IonCube isn't compatible with PHP v8.0 yet."
-    exit 1
+php_version=$(php -v | awk '/PHP/ {print $2}' | cut -d"." -f1,2 | head -n1)
+echo "Detected PHP version: $php_version"
+echo "Installing ionCube Loader version: $ioncube_version"
+
+echo "Removing old ionCube ini files and symlinks..."
+
+# Find and remove ionCube ini files
+find /etc/php/ -type f -name '*ioncube*.ini' -exec rm -f {} \;
+
+# Find and remove ionCube symlinks in conf.d directories
+find /etc/php/ -type l -name '*ioncube*.ini' -exec rm -f {} \;
+
+# Download and extract ionCube loader
+mkdir -p /tmp/update_ioncube
+cd /tmp/update_ioncube
+
+echo "Downloading ionCube loader $ioncube_version..."
+wget -q "https://downloads.ioncube.com/loader_downloads/ioncube_loaders_lin_x86-64_${ioncube_version}.tar.gz"
+tar -xzf "ioncube_loaders_lin_x86-64_${ioncube_version}.tar.gz"
+
+ext_dir=$(php -i | grep extension_dir | head -n1 | awk '{print $3}')
+loader_file="ioncube_loader_lin_${php_version}.so"
+
+if [ ! -f "./ioncube/$loader_file" ]; then
+  echo "Error: ionCube loader file $loader_file not found in extracted archive."
+  exit 1
 fi
 
-TMP_DIR="/tmp/update_ioncube"
-IONCUBE_VER="13.0.2"
-ARCH="x86-64"  # adjust if needed
+echo "Copying loader $loader_file to $ext_dir"
+cp "./ioncube/$loader_file" "$ext_dir"
 
-echo "Installing ionCube Loader v$IONCUBE_VER for PHP $php_version"
+ini_file="/etc/php/$php_version/mods-available/00-ioncube.ini"
 
-mkdir -p "$TMP_DIR"
-cd "$TMP_DIR"
-
-# Download and extract ionCube loaders
-wget -q "https://downloads.ioncube.com/loader_downloads/ioncube_loaders_lin_${ARCH}_${IONCUBE_VER}.tar.gz"
-tar -xzf "ioncube_loaders_lin_${ARCH}_${IONCUBE_VER}.tar.gz"
-
-# Detect PHP extension dir (use cli php here)
-EXT_DIR=$(php -i | grep extension_dir | head -n1 | awk '{print $3}')
-echo "Detected extension_dir: $EXT_DIR"
-
-# Copy ionCube loader .so for your PHP version
-LOADER_SO="ioncube_loader_lin_${php_version}.so"
-if [ ! -f "ioncube/$LOADER_SO" ]; then
-    echo "ERROR: Loader $LOADER_SO not found in extracted files"
-    exit 1
+# Ensure the directory exists, and create the ini file if missing
+if [ ! -d "/etc/php/$php_version/mods-available" ]; then
+  echo "Creating directory /etc/php/$php_version/mods-available"
+  mkdir -p "/etc/php/$php_version/mods-available"
 fi
-sudo cp "ioncube/$LOADER_SO" "$EXT_DIR"
 
-# Setup ini for mods-available (full path, load first)
-MODS_AVAILABLE_DIR="/etc/php/$php_version/mods-available"
-sudo mkdir -p "$MODS_AVAILABLE_DIR"
-INI_FILE="$MODS_AVAILABLE_DIR/00-ioncube.ini"
+echo "zend_extension=$ext_dir/$loader_file" > "$ini_file"
 
-echo "zend_extension=$EXT_DIR/$LOADER_SO" | sudo tee "$INI_FILE" > /dev/null
+# Enable ionCube module manually if phpenmod doesn't work
+if [ ! -L "/etc/php/$php_version/cli/conf.d/00-ioncube.ini" ]; then
+  echo "Creating symlink for CLI"
+  ln -s "$ini_file" "/etc/php/$php_version/cli/conf.d/00-ioncube.ini"
+fi
 
-# Remove any old ioncube ini symlinks to avoid duplicates
-sudo find /etc/php/$php_version/cli/conf.d -name '*ioncube*.ini' -exec rm -f {} +
-sudo find /etc/php/$php_version/fpm/conf.d -name '*ioncube*.ini' -exec rm -f {} +
+if [ ! -L "/etc/php/$php_version/fpm/conf.d/00-ioncube.ini" ]; then
+  echo "Creating symlink for FPM"
+  ln -s "$ini_file" "/etc/php/$php_version/fpm/conf.d/00-ioncube.ini"
+fi
 
-# Create symlinks in cli and fpm conf.d to mods-available/00-ioncube.ini
-sudo ln -s "$INI_FILE" "/etc/php/$php_version/cli/conf.d/00-ioncube.ini"
-sudo ln -s "$INI_FILE" "/etc/php/$php_version/fpm/conf.d/00-ioncube.ini"
+# Reload services
+echo "Reloading nginx and PHP-FPM..."
+systemctl reload nginx
+systemctl restart php${php_version}-fpm
 
-# Restart PHP-FPM and reload webserver
-sudo systemctl restart php"$php_version"-fpm
-sudo systemctl reload nginx
+echo "Cleaning up..."
+rm -rf /tmp/update_ioncube
 
-# Verify ionCube is loaded in CLI
-echo "Verifying ionCube loader in CLI:"
-php -v | grep -A 5 ionCube
+echo "ionCube Loader v$ioncube_version installed for PHP $php_version."
 
-# Cleanup
-rm -rf "$TMP_DIR"
+php -v | grep -B 3 -P 'ionCube PHP Loader v\d+\.\d+\.\d+'
 
-echo "ionCube Loader v$IONCUBE_VER installation complete for PHP $php_version."
+exit 0
