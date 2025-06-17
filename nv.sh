@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# -------- Functions --------
+# -------- Functions ---------
 
 _note()    { echo -e "\e[34m[NOTE]\e[0m $1"; }
 _success() { echo -e "\e[32m[SUCCESS]\e[0m $1"; }
