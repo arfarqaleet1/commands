@@ -6,14 +6,15 @@ _note()    { echo -e "\e[34m[NOTE]\e[0m $1"; }
 _success() { echo -e "\e[32m[SUCCESS]\e[0m $1"; }
 _error()   { echo -e "\e[31m[ERROR]\e[0m $1"; }
 
-# -------- Input --------
+# -------- Prompt for Version --------
 
-if [[ -z "$1" ]]; then
-    _error "Usage: $0 <node_version>  (e.g., $0 22.16.0)"
+read -rp "Enter the Node.js version you want to install (e.g., 22.16.0): " NODE_VER
+
+if [[ -z "$NODE_VER" ]]; then
+    _error "No version entered. Exiting."
     exit 1
 fi
 
-NODE_VER="$1"
 NODE_URL="https://nodejs.org/dist/v$NODE_VER/node-v$NODE_VER-linux-x64.tar.gz"
 NODE_DIR="/var/cw/systeam/node-v$NODE_VER-linux-x64"
 NODE_BIN="$NODE_DIR/bin/node"
