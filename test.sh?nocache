@@ -1,0 +1,149 @@
+#!/bin/bash
+
+# Exit immediately if a command exits with a non-zero status.
+set -e
+
+# Initialize ioncube_version with a default.
+ioncube_version_default="13.0.2"
+ioncube_version=""
+
+# Check if a version is provided as a command-line argument.
+# When running via curl | bash, arguments can be passed using 'bash -s -- <arg>'.
+if [ -n "$1" ]; then
+  ioncube_version="$1"
+  echo "Using ionCube Loader version from command-line argument: $ioncube_version"
+else
+  # If no argument, check if the script is running in an interactive terminal.
+  # -t 0 checks if standard input is connected to a terminal (TTY).
+  if [[ -t 0 ]]; then
+    read -p "Enter ionCube Loader version to install (default $ioncube_version_default): " user_input_version
+    # Use user input, or fall back to the default if input is empty.
+    ioncube_version=${user_input_version:-$ioncube_version_default}
+    echo "Using ionCube Loader version (interactive input): $ioncube_version"
+  else
+    # If not interactive and no argument, use the predefined default.
+    ioncube_version="$ioncube_version_default"
+    echo "Running in non-interactive mode (e.g., via 'curl | bash')."
+    echo "Using default ionCube Loader version: $ioncube_version"
+    echo "To specify a version in non-interactive mode, use: curl ... | bash -s -- <version>"
+  fi
+fi
+
+# Detect the major.minor PHP version (e.g., 8.2).
+php_version=$(php -v | awk '/PHP/ {print $2}' | cut -d"." -f1,2 | head -n1)
+echo "Detected PHP version: $php_version"
+echo "Attempting to install ionCube Loader version: $ioncube_version"
+
+echo "Removing old ionCube INI files and symlinks..."
+
+# Find and remove existing ionCube INI files across PHP configurations.
+find /etc/php/ -type f -name '*ioncube*.ini' -exec rm -f {} \;
+
+# Find and remove existing ionCube symlinks in conf.d directories.
+find /etc/php/ -type l -name '*ioncube*.ini' -exec rm -f {} \;
+
+# Create a unique temporary directory for download and extraction.
+# Using $$ ensures the directory name is unique to the current process ID.
+tmp_dir="/tmp/update_ioncube_$$"
+mkdir -p "$tmp_dir"
+cd "$tmp_dir"
+
+# Define the full download URL and the expected archive filename.
+download_url="https://downloads.ioncube.com/loader_downloads/ioncube_loaders_lin_x86-64_${ioncube_version}.tar.gz"
+archive_filename="ioncube_loaders_lin_x86-64_${ioncube_version}.tar.gz"
+
+echo "Downloading ionCube loader from: $download_url"
+# Download the ionCube loader archive.
+# --tries=3: Retry up to 3 times if the download fails.
+# --timeout=10: Set a 10-second timeout for connection and data transfer.
+# -O: Save the file with the specified filename.
+wget --tries=3 --timeout=10 -O "$archive_filename" "$download_url"
+# Check the exit status of the wget command.
+if [ $? -ne 0 ]; then
+  echo "Error: Failed to download ionCube loader from $download_url."
+  echo "Please check your internet connection, DNS settings, or verify the ionCube version and URL."
+  rm -rf "$tmp_dir" # Clean up temporary directory before exiting.
+  exit 1
+fi
+
+echo "Extracting ionCube loader..."
+# Extract the downloaded archive.
+tar -xzf "$archive_filename"
+# Check the exit status of the tar command.
+if [ $? -ne 0 ]; then
+  echo "Error: Failed to extract ionCube loader archive '$archive_filename'."
+  echo "The downloaded file might be corrupted or incomplete."
+  rm -rf "$tmp_dir" # Clean up temporary directory before exiting.
+  exit 1
+fi
+
+# Determine the PHP extension directory path.
+ext_dir=$(php -i | grep extension_dir | head -n1 | awk '{print $3}')
+# Construct the expected ionCube loader file name based on PHP version.
+loader_file="ioncube_loader_lin_${php_version}.so"
+
+# Verify if the extracted loader file exists.
+if [ ! -f "./ioncube/$loader_file" ]; then
+  echo "Error: ionCube loader file '$loader_file' not found in the extracted archive."
+  echo "This might mean the PHP version ($php_version) is not supported by this ionCube Loader version ($ioncube_version), or the extraction failed partially."
+  rm -rf "$tmp_dir" # Clean up temporary directory before exiting.
+  exit 1
+fi
+
+echo "Copying loader '$loader_file' to '$ext_dir'"
+# Copy the loader file to the PHP extension directory.
+cp "./ioncube/$loader_file" "$ext_dir"
+
+# Define the path for the new ionCube INI configuration file.
+ini_file="/etc/php/$php_version/mods-available/00-ioncube.ini"
+
+# Ensure the 'mods-available' directory exists for the PHP version.
+if [ ! -d "/etc/php/$php_version/mods-available" ]; then
+  echo "Creating directory /etc/php/$php_version/mods-available"
+  mkdir -p "/etc/php/$php_version/mods-available"
+fi
+
+# Create the ionCube INI file with the zend_extension directive.
+echo "zend_extension=$ext_dir/$loader_file" > "$ini_file"
+echo "ionCube INI file created at: $ini_file"
+
+# Create symlinks for CLI (Command Line Interface) and FPM (FastCGI Process Manager) configurations.
+# Check if symlink already exists before creating to avoid errors.
+if [ ! -L "/etc/php/$php_version/cli/conf.d/00-ioncube.ini" ]; then
+  echo "Creating symlink for CLI configuration..."
+  ln -s "$ini_file" "/etc/php/$php_version/cli/conf.d/00-ioncube.ini"
+else
+  echo "CLI symlink already exists, skipping creation."
+fi
+
+if [ ! -L "/etc/php/$php_version/fpm/conf.d/00-ioncube.ini" ]; then
+  echo "Creating symlink for FPM configuration..."
+  ln -s "$ini_file" "/etc/php/$php_version/fpm/conf.d/00-ioncube.ini"
+else
+  echo "FPM symlink already exists, skipping creation."
+fi
+
+# Reload services to apply changes.
+echo "Reloading nginx and PHP-FPM..."
+# Use || true to prevent script from exiting if a service is not found/running.
+systemctl reload nginx || echo "Warning: Failed to reload nginx. It might not be installed or running."
+systemctl restart php${php_version}-fpm || echo "Warning: Failed to restart php${php_version}-fpm. It might not be installed or running."
+
+echo "Cleaning up temporary directory: $tmp_dir"
+rm -rf "$tmp_dir"
+
+echo "ionCube Loader v$ioncube_version installation attempt for PHP $php_version completed."
+
+# Verify ionCube Loader installation by checking php -v output.
+echo "Verifying ionCube Loader installation:"
+php -v | grep -B 3 -P 'ionCube PHP Loader v\d+\.\d+\.\d+'
+
+# Final check to confirm ionCube Loader is detected.
+if php -v | grep -q -P 'ionCube PHP Loader v\d+\.\d+\.\d+'; then
+  echo "ionCube Loader successfully detected."
+  exit 0
+else
+  echo "Error: ionCube Loader was not detected after installation."
+  echo "Please review the output above for any errors or warnings."
+  exit 1
+fi
