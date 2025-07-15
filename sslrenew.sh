@@ -6,7 +6,7 @@ read -p "Please enter client's Email: " email
 read -p "Please enter client's API key: " api_key
 read -p "Please enter SSL email: " ssl_email
 
-# Authenticate
+# Authenticate and get access_token
 get_token=$(curl --silent -X POST \
   --header 'Content-Type: application/x-www-form-urlencoded' \
   --header 'Accept: application/json' \
@@ -25,8 +25,8 @@ echo "✅ Authorization successful."
 declare -A server_apps
 
 while true; do
-    read -rp "Enter server_id (or type ':done' to finish): " server_id
-    if [[ "$server_id" == ":done" ]]; then
+    read -rp "Enter server_id (or type ':done', 'done' or 'exit' to finish): " server_id
+    if [[ "$server_id" == ":done" || "$server_id" == "done" || "$server_id" == "exit" ]]; then
         break
     fi
 
