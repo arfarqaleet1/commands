@@ -1,4 +1,3 @@
-sucheck(){
 #!/bin/bash
 
 LOG_DIR="/var/log/internal/log_util/"
@@ -53,4 +52,3 @@ parse_wp_errors() {
 }
 
 parse_wp_errors
-}
